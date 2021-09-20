@@ -1,5 +1,5 @@
 import { expect } from "./expect.test";
-import { replaceInText } from "./replaceInText";
+import { replaceInText } from "../src/replaceInText";
 
 describe(`replaceInText`, () => {
   const imgUrl = `https://example.com/image.jpg`;

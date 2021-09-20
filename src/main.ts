@@ -1,6 +1,5 @@
 import {
   App,
-  Modal,
   Notice,
   Plugin,
   PluginSettingTab,
@@ -8,24 +7,33 @@ import {
   TFile,
   TFolder,
 } from "obsidian";
-import { sanitizeUrlToFileName } from "./sanitizeUrlToFileName";
-import { replaceInText } from "./replaceInText";
-import { shim } from "string.prototype.matchall";
-import { run, runAll } from "./run";
 import safeRegex from "safe-regex";
 
-shim();
-
+import { replaceAsync, imageTagProcessor } from "./contentProcessor";
 export interface ISettings {
   include: string;
+  mediaRootDirectory: string;
 }
+
+const EXTERNAL_MEDIA_LINK_PATTERN = /\!\[(?<anchor>.*?)\]\((?<link>.+?)\)/g;
 
 const DEFAULT_SETTINGS: ISettings = {
   include: "*.md",
+  mediaRootDirectory: "media",
 };
 
 export default class LocalImagesPlugin extends Plugin {
   settings: ISettings;
+
+  async ensureFolderExists(folderPath: string) {
+    try {
+      await this.app.vault.createFolder(folderPath);
+    } catch (error) {
+      if (!error.message.contains("Folder already exists")) {
+        throw error;
+      }
+    }
+  }
 
   async onload() {
     console.log("loading plugin");
@@ -34,7 +42,24 @@ export default class LocalImagesPlugin extends Plugin {
 
     this.addStatusBarItem().setText("Status Bar Text");
 
-    this.addCommand({
+    this.addRibbonIcon("dice", "Sample Plugin", async () => {
+      const activeFile = this.app.workspace.getActiveFile();
+      const content = await this.app.vault.read(activeFile);
+      await this.ensureFolderExists(this.settings.mediaRootDirectory);
+
+      const fixedContent = await replaceAsync(
+        content,
+        EXTERNAL_MEDIA_LINK_PATTERN,
+        imageTagProcessor(this.app, this.settings.mediaRootDirectory)
+      );
+
+      console.debug(`fixed Content: `, fixedContent);
+
+      await this.app.vault.modify(activeFile, fixedContent);
+
+      new Notice("This is a notice!");
+    });
+    /*  this.addCommand({
       id: "download-images-all",
       name: "Download images locally for all your notes",
       callback: async () => {
@@ -58,7 +83,7 @@ export default class LocalImagesPlugin extends Plugin {
 
         await run(this, currentFile);
       },
-    });
+    }); */
 
     this.addSettingTab(new SampleSettingTab(this.app, this));
   }
@@ -94,22 +119,6 @@ export default class LocalImagesPlugin extends Plugin {
     } catch (error) {
       this.displayError(error);
     }
-  }
-}
-
-class SampleModal extends Modal {
-  constructor(app: App) {
-    super(app);
-  }
-
-  onOpen() {
-    let { contentEl } = this;
-    contentEl.setText("Woah!");
-  }
-
-  onClose() {
-    let { contentEl } = this;
-    contentEl.empty();
   }
 }
 

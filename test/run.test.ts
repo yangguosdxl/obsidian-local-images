@@ -1,5 +1,5 @@
 import Sinon, { mock } from "sinon";
-import { expect } from "./expect.test";
+import { expect } from "./test/expect.test";
 import type LocalImagesPlugin from "./main";
 import { runAll } from "./run";
 import { getMockPlugin } from "./test/mock.test";

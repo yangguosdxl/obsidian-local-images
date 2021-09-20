@@ -1,9 +1,9 @@
 import type { App, TFile } from "obsidian";
 import Sinon from "sinon";
 import { expect } from "./expect.test";
-import type LocalImagesPlugin from "./main";
-import { run, runAll } from "./run";
-import { getMockPlugin, IMockFile } from "./test/mock.test";
+import type LocalImagesPlugin from "../src/main";
+import { run, runAll } from "../src/run";
+import { getMockPlugin, IMockFile } from "./mock.test";
 
 const mockNotes: Record<string, IMockFile> = {
   mockNoteSimple: {
