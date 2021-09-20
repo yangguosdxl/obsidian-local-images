@@ -5,22 +5,17 @@ import {
   PluginSettingTab,
   Setting,
   TFile,
-  TFolder,
+  WorkspaceLeaf,
 } from "obsidian";
 import safeRegex from "safe-regex";
 
-import { replaceAsync, imageTagProcessor } from "./contentProcessor";
-export interface ISettings {
-  include: string;
-  mediaRootDirectory: string;
-}
-
-const EXTERNAL_MEDIA_LINK_PATTERN = /\!\[(?<anchor>.*?)\]\((?<link>.+?)\)/g;
-
-const DEFAULT_SETTINGS: ISettings = {
-  include: "*.md",
-  mediaRootDirectory: "media",
-};
+import { imageTagProcessor } from "./contentProcessor";
+import { replaceAsync, clearContent } from "./utils";
+import {
+  ISettings,
+  DEFAULT_SETTINGS,
+  EXTERNAL_MEDIA_LINK_PATTERN,
+} from "./config";
 
 export default class LocalImagesPlugin extends Plugin {
   settings: ISettings;
@@ -35,57 +30,61 @@ export default class LocalImagesPlugin extends Plugin {
     }
   }
 
+  private async proccessPage(file: TFile) {
+    const content = await this.app.vault.read(file);
+    await this.ensureFolderExists(this.settings.mediaRootDirectory);
+
+    const cleanContent = this.settings.cleanContent
+      ? clearContent(content)
+      : content;
+    const fixedContent = await replaceAsync(
+      cleanContent,
+      EXTERNAL_MEDIA_LINK_PATTERN,
+      imageTagProcessor(this.app, this.settings.mediaRootDirectory)
+    );
+
+    await this.app.vault.modify(file, fixedContent);
+
+    new Notice(`Images for "${file.path}" were saved.`);
+  }
+
   async onload() {
     console.log("loading plugin");
 
     await this.loadSettings();
 
-    this.addStatusBarItem().setText("Status Bar Text");
-
-    this.addRibbonIcon("dice", "Sample Plugin", async () => {
-      const activeFile = this.app.workspace.getActiveFile();
-      const content = await this.app.vault.read(activeFile);
-      await this.ensureFolderExists(this.settings.mediaRootDirectory);
-
-      const fixedContent = await replaceAsync(
-        content,
-        EXTERNAL_MEDIA_LINK_PATTERN,
-        imageTagProcessor(this.app, this.settings.mediaRootDirectory)
-      );
-
-      console.debug(`fixed Content: `, fixedContent);
-
-      await this.app.vault.modify(activeFile, fixedContent);
-
-      new Notice("This is a notice!");
-    });
-    /*  this.addCommand({
-      id: "download-images-all",
-      name: "Download images locally for all your notes",
-      callback: async () => {
-        try {
-          await runAll(this);
-        } catch (error) {
-          this.displayError(error);
-        }
-      },
-    });
-
     this.addCommand({
       id: "download-images",
       name: "Download images locally",
       callback: async () => {
-        const currentFile = this.app.workspace.getActiveFile();
+        const activeFile = this.app.workspace.getActiveFile();
+        await this.proccessPage(activeFile);
 
-        if (!currentFile) {
-          return this.displayError("Please select a file first");
+        this.app.workspace.iterateAllLeaves(async (leaf: WorkspaceLeaf) => {
+          console.dir(leaf);
+        });
+      },
+    });
+
+    this.addCommand({
+      id: "download-images-all",
+      name: "Download images locally for all your notes",
+      callback: async () => {
+        const files = this.app.vault.getMarkdownFiles();
+        const includeRegex = new RegExp(this.settings.include, "i");
+
+        const promises: Promise<void>[] = [];
+        for (const file of files) {
+          if (file.path.match(includeRegex)) {
+            promises.push(this.proccessPage(file));
+          }
         }
 
-        await run(this, currentFile);
+        await Promise.all(promises);
       },
-    }); */
+    });
 
-    this.addSettingTab(new SampleSettingTab(this.app, this));
+    this.addSettingTab(new SettingTab(this.app, this));
   }
   displayError(error: Error | string, file?: TFile): void {
     if (file) {
@@ -122,7 +121,7 @@ export default class LocalImagesPlugin extends Plugin {
   }
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class SettingTab extends PluginSettingTab {
   plugin: LocalImagesPlugin;
 
   constructor(app: App, plugin: LocalImagesPlugin) {

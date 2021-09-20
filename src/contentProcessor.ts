@@ -1,60 +1,54 @@
 import path from "path";
-import fs from "fs";
 import { URL } from "url";
 
-import got from "got";
 import { App, DataAdapter } from "obsidian";
 
-import { fromBuffer } from "file-type";
 import filenamify from "filenamify";
-import { XXHash32 } from "ts-xxhash";
-const FILENAME_TEMPLATE = "media";
-const MAX_FILENAME_INDEX = 10;
 
-/*
-https://stackoverflow.com/a/48032528/1020973
-It will be better to do it type-correct.
-
-*/
-export async function replaceAsync(str: any, regex: any, asyncFn: any) {
-  const promises: Promise<any>[] = [];
-  str.replace(regex, (match: string, ...args: any) => {
-    const promise = asyncFn(match, ...args);
-    promises.push(promise);
-  });
-  const data = await Promise.all(promises);
-  return str.replace(regex, () => data.shift());
-}
+import { isUrl, downloadImage, fileExtByContent } from "./utils";
+import {
+  FILENAME_TEMPLATE,
+  MAX_FILENAME_INDEX,
+  FILENAME_ATTEMPTS,
+} from "./config";
+import { linkHashes } from "./linksHash";
 
 export function imageTagProcessor(app: App, mediaDir: string) {
-  async function processImageTag(
-    match: string,
-    anchor: string,
-    link: string,
-    offset: number
-  ) {
-    console.debug(
-      `processImageTag#${offset}. anchor: "${anchor}". link: "${link}" `
-    );
+  async function processImageTag(match: string, anchor: string, link: string) {
+    if (!isUrl(link)) {
+      return match;
+    }
 
     try {
-      // console.debug("dirtyFilePath, filePath", dirtyFilePath, filePath);
-
       const fileData = await downloadImage(link);
 
-      const { fileName, needWrite } = await chooseFileName(
-        app.vault.adapter,
-        mediaDir,
-        anchor,
-        link,
-        fileData
-      );
+      // when several images refer to the same file they can be partly
+      // failed to download because file already exists, so try to resuggest it several times
+      let attempt = 0;
+      while (attempt < FILENAME_ATTEMPTS) {
+        try {
+          const { fileName, needWrite } = await chooseFileName(
+            app.vault.adapter,
+            mediaDir,
+            anchor,
+            link,
+            fileData
+          );
 
-      if (needWrite) {
-        await app.vault.createBinary(fileName, fileData);
+          if (needWrite) {
+            await app.vault.createBinary(fileName, fileData);
+          }
+
+          return `![${anchor}](${fileName})`;
+        } catch (error) {
+          if (error.message === "File already exists.") {
+            attempt++;
+          } else {
+            throw error;
+          }
+        }
       }
-
-      return `![${anchor}](${fileName})`;
+      return match;
     } catch (error) {
       console.warn("Image processing failed: ", error);
       return match;
@@ -64,12 +58,6 @@ export function imageTagProcessor(app: App, mediaDir: string) {
   return processImageTag;
 }
 
-async function downloadImage(url: string): Promise<ArrayBuffer> {
-  const res = await got(url, { responseType: "buffer" });
-  return res.body;
-}
-
-const linksInfo: Record<string, number> = {};
 async function chooseFileName(
   adapter: DataAdapter,
   dir: string,
@@ -77,7 +65,7 @@ async function chooseFileName(
   link: string,
   contentData: ArrayBuffer
 ): Promise<{ fileName: string; needWrite: boolean }> {
-  const fileExt = (await fromBuffer(contentData))?.ext;
+  const fileExt = await fileExtByContent(contentData);
 
   // if there is no anchor try get file name from url
   if (!baseName) {
@@ -92,13 +80,10 @@ async function chooseFileName(
 
   // if filename already ends with correct extension, remove it to work with base name
   if (baseName.endsWith(`.${fileExt}`)) {
-    console.debug("baseName.endsWith");
     baseName = baseName.slice(0, -1 * (fileExt.length + 1));
   }
 
   baseName = filenamify(baseName);
-
-  console.debug(baseName);
 
   let fileName = "";
   let needWrite = true;
@@ -108,13 +93,12 @@ async function chooseFileName(
       ? path.join(dir, `${baseName}-${index}.${fileExt}`)
       : path.join(dir, `${baseName}.${fileExt}`);
 
-    console.debug("suggestedName ", suggestedName);
     if (await adapter.exists(suggestedName, false)) {
-      ensureHashGenerated(link, contentData);
+      linkHashes.ensureHashGenerated(link, contentData);
 
       const fileData = await adapter.readBinary(suggestedName);
-      const fileHash = XXHash32.hash(0, fileData).toNumber();
-      if (linksInfo[link] == fileHash) {
+
+      if (linkHashes.isSame(link, fileData)) {
         fileName = suggestedName;
         needWrite = false;
       }
@@ -128,14 +112,7 @@ async function chooseFileName(
     throw new Error("Failed to generate file name for media file.");
   }
 
-  ensureHashGenerated(link, contentData);
+  linkHashes.ensureHashGenerated(link, contentData);
 
   return { fileName, needWrite };
-}
-
-function ensureHashGenerated(link: string, data: ArrayBuffer) {
-  if (!linksInfo[link]) {
-    linksInfo[link] = XXHash32.hash(0, data).toNumber();
-    console.debug("linksInfo[link] ", linksInfo[link]);
-  }
 }
