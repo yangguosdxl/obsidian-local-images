@@ -2,6 +2,8 @@ export const FILENAME_TEMPLATE = "media";
 
 export const MAX_FILENAME_INDEX = 1000;
 
+export const UPDATE_MODIFIED_QUEUE_INTERVAL = 4000; // 400 msec
+
 export const EXTERNAL_MEDIA_LINK_PATTERN =
   /\!\[(?<anchor>.*?)\]\((?<link>.+?)\)/g;
 

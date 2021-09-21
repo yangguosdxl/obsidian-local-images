@@ -5,7 +5,6 @@ import {
   PluginSettingTab,
   Setting,
   TFile,
-  WorkspaceLeaf,
 } from "obsidian";
 import safeRegex from "safe-regex";
 
@@ -15,10 +14,13 @@ import {
   ISettings,
   DEFAULT_SETTINGS,
   EXTERNAL_MEDIA_LINK_PATTERN,
+  UPDATE_MODIFIED_QUEUE_INTERVAL,
 } from "./config";
+import { UniqueQueue } from "./uniqueQueue";
 
 export default class LocalImagesPlugin extends Plugin {
   settings: ISettings;
+  modifiedQueue = new UniqueQueue<TFile>();
 
   async ensureFolderExists(folderPath: string) {
     try {
@@ -30,8 +32,7 @@ export default class LocalImagesPlugin extends Plugin {
     }
   }
 
-  private async proccessPage(file: TFile) {
-    const content = await this.app.vault.read(file);
+  private async processContent(content: string) {
     await this.ensureFolderExists(this.settings.mediaRootDirectory);
 
     const cleanContent = this.settings.cleanContent
@@ -43,15 +44,22 @@ export default class LocalImagesPlugin extends Plugin {
       imageTagProcessor(this.app, this.settings.mediaRootDirectory)
     );
 
+    return fixedContent;
+  }
+  private async proccessPage(file: TFile) {
+    const content = await this.app.vault.read(file);
+
+    const fixedContent = await this.processContent(content);
+
     await this.app.vault.modify(file, fixedContent);
 
     new Notice(`Images for "${file.path}" were saved.`);
   }
 
   async onload() {
-    console.log("loading plugin");
-
     await this.loadSettings();
+
+    // this.app.vault.on("modify", this.proccessPage, this);
 
     this.addCommand({
       id: "download-images",
@@ -59,10 +67,6 @@ export default class LocalImagesPlugin extends Plugin {
       callback: async () => {
         const activeFile = this.app.workspace.getActiveFile();
         await this.proccessPage(activeFile);
-
-        this.app.workspace.iterateAllLeaves(async (leaf: WorkspaceLeaf) => {
-          console.dir(leaf);
-        });
       },
     });
 
@@ -84,8 +88,36 @@ export default class LocalImagesPlugin extends Plugin {
       },
     });
 
+    this.registerCodeMirror((cm: CodeMirror.Editor) => {
+      cm.on(
+        "beforeChange",
+        async (instance: CodeMirror.Editor, changeObj: any) => {
+          if (changeObj.origin == "paste" || changeObj.origin == "input") {
+            const activeFile = this.app.workspace.getActiveFile();
+            this.modifiedQueue.push(activeFile);
+          }
+        }
+      );
+    });
+
+    this.registerInterval(
+      window.setInterval(
+        this.processModifiedQueue,
+        UPDATE_MODIFIED_QUEUE_INTERVAL,
+        this
+      )
+    );
+
     this.addSettingTab(new SettingTab(this.app, this));
   }
+
+  async processModifiedQueue(self: LocalImagesPlugin) {
+    let nextPage: TFile = null;
+    while ((nextPage = self.modifiedQueue.pop())) {
+      self.proccessPage(nextPage);
+    }
+  }
+
   displayError(error: Error | string, file?: TFile): void {
     if (file) {
       new Notice(
@@ -100,19 +132,13 @@ export default class LocalImagesPlugin extends Plugin {
     console.error(`LocalImages: error: ${error}`);
   }
 
-  onunload() {
-    console.log("unloading plugin");
-  }
+  onunload() {}
 
   async loadSettings() {
-    console.log("loading settings");
-
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
 
   async saveSettings() {
-    console.log("saving settings");
-
     try {
       await this.saveData(this.settings);
     } catch (error) {
