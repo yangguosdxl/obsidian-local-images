@@ -1,3 +1,4 @@
+// Queue that keep only unique values
 export class UniqueQueue<T> {
   private queue = new Array<T>();
 

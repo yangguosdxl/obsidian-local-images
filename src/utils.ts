@@ -46,6 +46,7 @@ export async function fileExtByContent(content: ArrayBuffer) {
 function recreateImageTag(match: string, anchor: string, link: string) {
   return `![${anchor}](${link})`;
 }
+
 export function clearContent(content: string) {
   const cleanContent = content.replace(DIRTY_IMAGE_TAG, recreateImageTag);
   return cleanContent;
