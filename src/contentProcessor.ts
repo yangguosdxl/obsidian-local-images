@@ -23,7 +23,7 @@ export function imageTagProcessor(app: App, mediaDir: string) {
       const fileData = await downloadImage(link);
 
       // when several images refer to the same file they can be partly
-      // failed to download because file already exists, so try to resuggest it several times
+      // failed to download because file already exists, so try to resuggest filename several times
       let attempt = 0;
       while (attempt < FILENAME_ATTEMPTS) {
         try {

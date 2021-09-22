@@ -28,6 +28,7 @@ export default {
   external: ["obsidian"],
   plugins: [
     execute([
+      `mkdir -p ${currentDir}/build`,
       `cp -u ${currentDir}/manifest.json ${currentDir}/build/manifest.json`,
       /* `cp -u ${currentDir}/styles.css ${currentDir}/build/styles.css`, */
     ]),
