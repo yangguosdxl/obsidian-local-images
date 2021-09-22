@@ -4,6 +4,20 @@
 
 Finds hotlinked images in your notes, downloads and saves them locally and finally adjusts the link in your note to point to the local file.
 
+![](docs/obsidian-local-images-sep2021.webm)
+
+Use it with commands:
+
+**Download images locally** -- your active page will be processed.
+
+or
+
+**Download images locally for all your notes** -- will be processed all the pages in your vault, that corresponds to **Include** parameter in the plugin's settings.
+
+Also you can turn on in plugin's settings processing the active page when external links pasted into the page.
+
+This plugin was developed from [niekcandaele's](https://github.com/niekcandaele/obsidian-local-images) code base. Key principles for downloading, saving were given there, and some texts too. Even the plugin's name is original.
+
 ## Development
 
 ```

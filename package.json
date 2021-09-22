@@ -1,8 +1,8 @@
 {
   "name": "obsidian-local-images",
   "version": "0.14.0",
-  "description": "This is a plugin for Obsidian (https://obsidian.md) that downloads images from external links and svae in local vault.",
-  "main": "main.js",
+  "description": "This is a plugin for Obsidian (https://obsidian.md) that downloads images from external links and save in local vault.",
+  "main": "build/main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",
     "build": "rollup --config rollup.config.js --environment BUILD:production",

@@ -30,7 +30,7 @@ export default {
     execute([
       `mkdir -p ${currentDir}/build`,
       `cp -u ${currentDir}/manifest.json ${currentDir}/build/manifest.json`,
-      /* `cp -u ${currentDir}/styles.css ${currentDir}/build/styles.css`, */
+      `cp -u ${currentDir}/styles.css ${currentDir}/build/styles.css`,
     ]),
     typescript(),
     nodeResolve({ browser: true }),
@@ -38,6 +38,7 @@ export default {
     commonjs(),
   ],
   onwarn(warning, warn) {
+    // workaround to prevent rollup build error
     if (
       warning.code === "EVAL" &&
       /.*\/node_modules\/file-type\/.*/.test(warning.loc.file)
