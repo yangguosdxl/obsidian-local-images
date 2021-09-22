@@ -4,7 +4,7 @@
 
 Finds hotlinked images in your notes, downloads and saves them locally and finally adjusts the link in your note to point to the local file.
 
-![](docs/obsidian-local-images-sep2021.webm)
+![](docs/obsidian-local-images-sep2021.gif)
 
 Use it with commands:
 
