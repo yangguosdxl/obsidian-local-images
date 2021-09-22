@@ -9,11 +9,12 @@ import {
 import safeRegex from "safe-regex";
 
 import { imageTagProcessor } from "./contentProcessor";
-import { replaceAsync, clearContent } from "./utils";
+import { replaceAsync, cleanContent } from "./utils";
 import {
   ISettings,
   DEFAULT_SETTINGS,
   EXTERNAL_MEDIA_LINK_PATTERN,
+  ANY_URL_PATTERN,
 } from "./config";
 import { UniqueQueue } from "./uniqueQueue";
 
@@ -23,34 +24,33 @@ export default class LocalImagesPlugin extends Plugin {
   intervalId: number = null;
 
   private async proccessPage(file: TFile) {
-    console.debug("proccessPage");
-    console.dir(this.app);
     // const content = await this.app.vault.read(file);
     const content = await this.app.vault.cachedRead(file);
 
-    // workaround to process newly created pages
-    if (!content) {
-      this.enqueueActivePage();
-      return;
-    }
-
     await this.ensureFolderExists(this.settings.mediaRootDirectory);
 
-    const cleanContent = this.settings.cleanContent
-      ? clearContent(content)
+    const cleanedContent = this.settings.cleanContent
+      ? cleanContent(content)
       : content;
     const fixedContent = await replaceAsync(
-      cleanContent,
+      cleanedContent,
       EXTERNAL_MEDIA_LINK_PATTERN,
       imageTagProcessor(this.app, this.settings.mediaRootDirectory)
     );
 
     if (content != fixedContent) {
+      this.modifiedQueue.remove(file);
       await this.app.vault.modify(file, fixedContent);
-    }
 
-    if (this.settings.showNotifications) {
-      new Notice(`Images for "${file.path}" were saved.`);
+      if (this.settings.showNotifications) {
+        new Notice(`Images for "${file.path}" were processed.`);
+      }
+    } else {
+      if (this.settings.showNotifications) {
+        new Notice(
+          `Page "${file.path}" has been processed, but nothing was changed.`
+        );
+      }
     }
   }
 
@@ -92,8 +92,10 @@ export default class LocalImagesPlugin extends Plugin {
     this.registerCodeMirror((cm: CodeMirror.Editor) => {
       // on("beforeChange") can not execute async function in event handler, so we use queue to pass modified pages to timeouted handler
       cm.on("change", async (instance: CodeMirror.Editor, changeObj: any) => {
-        if (changeObj.origin == "paste") {
-          console.debug(`on("change.paste")`, changeObj);
+        if (
+          changeObj.origin == "paste" &&
+          ANY_URL_PATTERN.test(changeObj.text)
+        ) {
           this.enqueueActivePage();
         }
       });
@@ -123,15 +125,18 @@ export default class LocalImagesPlugin extends Plugin {
   }
 
   processModifiedQueue = async () => {
-    let nextPage: TFile = null;
-    while ((nextPage = this.modifiedQueue.pop())) {
-      this.proccessPage(nextPage);
+    const iteration = this.modifiedQueue.iterationQueue();
+    for (const page of iteration) {
+      this.proccessPage(page);
     }
   };
 
   enqueueActivePage() {
     const activeFile = this.app.workspace.getActiveFile();
-    this.modifiedQueue.push(activeFile);
+    this.modifiedQueue.push(
+      activeFile,
+      this.settings.realTimeAttemptsToProcess
+    );
   }
   // It is good idea to create the plugin more verbose
   displayError(error: Error | string, file?: TFile): void {
@@ -190,8 +195,8 @@ class SettingTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "Local images" });
 
     new Setting(containerEl)
-      .setName("Realtime processing")
-      .setDesc("Process pages while editing. May slow down your Obsidian.")
+      .setName("On paste processing")
+      .setDesc("Process active page if external link was pasted.")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.realTimeUpdate)
@@ -203,8 +208,11 @@ class SettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Realtime processing interval")
-      .setDesc("Interval in milliseconds for realtime processing update.")
+      .setName("On paste processing interval")
+      .setDesc("Interval in milliseconds for processing update.")
+      .setTooltip(
+        "I could not process content on the fly when it is pasted. So real processing implements periodically with the given here timeout."
+      )
       .addText((text) =>
         text
           .setValue(String(this.plugin.settings.realTimeUpdateInterval))
@@ -223,6 +231,35 @@ class SettingTab extends PluginSettingTab {
             this.plugin.settings.realTimeUpdateInterval = numberValue;
             await this.plugin.saveSettings();
             this.plugin.setupQueueInterval();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Attempts to process")
+      .setDesc(
+        "Number of attempts to process content on paste. For me 3 attempts is enouth with 1 second update interval."
+      )
+      .setTooltip(
+        "I could not find the way to access newly pasted content immediatily, after pasting, Plugin's API returns old text for a while. The workaround is to process page several times until content is changed."
+      )
+      .addText((text) =>
+        text
+          .setValue(String(this.plugin.settings.realTimeAttemptsToProcess))
+          .onChange(async (value: string) => {
+            const numberValue = Number(value);
+            if (
+              isNaN(numberValue) ||
+              !Number.isInteger(numberValue) ||
+              numberValue < 1 ||
+              numberValue > 100
+            ) {
+              this.plugin.displayError(
+                "Realtime processing interval should be a positive integer number greater than 1 and lower than 100!"
+              );
+              return;
+            }
+            this.plugin.settings.realTimeAttemptsToProcess = numberValue;
+            await this.plugin.saveSettings();
           })
       );
 

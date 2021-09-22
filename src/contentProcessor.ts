@@ -3,9 +3,7 @@ import { URL } from "url";
 
 import { App, DataAdapter } from "obsidian";
 
-import filenamify from "filenamify";
-
-import { isUrl, downloadImage, fileExtByContent } from "./utils";
+import { isUrl, downloadImage, fileExtByContent, cleanFileName } from "./utils";
 import {
   FILENAME_TEMPLATE,
   MAX_FILENAME_INDEX,
@@ -35,11 +33,15 @@ export function imageTagProcessor(app: App, mediaDir: string) {
             fileData
           );
 
-          if (needWrite) {
+          if (needWrite && fileName) {
             await app.vault.createBinary(fileName, fileData);
           }
 
-          return `![${anchor}](${fileName})`;
+          if (fileName) {
+            return `![${anchor}](${fileName})`;
+          } else {
+            return match;
+          }
         } catch (error) {
           if (error.message === "File already exists.") {
             attempt++;
@@ -66,7 +68,9 @@ async function chooseFileName(
   contentData: ArrayBuffer
 ): Promise<{ fileName: string; needWrite: boolean }> {
   const fileExt = await fileExtByContent(contentData);
-
+  if (!fileExt) {
+    return { fileName: "", needWrite: false };
+  }
   // if there is no anchor try get file name from url
   if (!baseName) {
     const parsedUrl = new URL(link);
@@ -83,7 +87,7 @@ async function chooseFileName(
     baseName = baseName.slice(0, -1 * (fileExt.length + 1));
   }
 
-  baseName = filenamify(baseName);
+  baseName = cleanFileName(baseName);
 
   let fileName = "";
   let needWrite = true;

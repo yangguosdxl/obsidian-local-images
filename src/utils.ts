@@ -1,8 +1,9 @@
 import got from "got";
 import { fromBuffer } from "file-type";
 import isSvg from "is-svg";
+import filenamify from "filenamify";
 
-import { DIRTY_IMAGE_TAG } from "./config";
+import { DIRTY_IMAGE_TAG, FORBIDDEN_SYMBOLS_FILENAME_PATTERN } from "./config";
 /*
 https://stackoverflow.com/a/48032528/1020973
 It will be better to do it type-correct.
@@ -47,7 +48,15 @@ function recreateImageTag(match: string, anchor: string, link: string) {
   return `![${anchor}](${link})`;
 }
 
-export function clearContent(content: string) {
-  const cleanContent = content.replace(DIRTY_IMAGE_TAG, recreateImageTag);
-  return cleanContent;
+export function cleanContent(content: string) {
+  const cleanedContent = content.replace(DIRTY_IMAGE_TAG, recreateImageTag);
+  return cleanedContent;
+}
+
+export function cleanFileName(name: string) {
+  const cleanedName = filenamify(name).replace(
+    FORBIDDEN_SYMBOLS_FILENAME_PATTERN,
+    "_"
+  );
+  return cleanedName;
 }
