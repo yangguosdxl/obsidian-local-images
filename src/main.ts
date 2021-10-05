@@ -15,6 +15,8 @@ import {
   DEFAULT_SETTINGS,
   EXTERNAL_MEDIA_LINK_PATTERN,
   ANY_URL_PATTERN,
+  NOTICE_TIMEOUT,
+  TIMEOUT_LIKE_INFINITY,
 } from "./config";
 import { UniqueQueue } from "./uniqueQueue";
 
@@ -23,7 +25,7 @@ export default class LocalImagesPlugin extends Plugin {
   modifiedQueue = new UniqueQueue<TFile>();
   intervalId: number = null;
 
-  private async proccessPage(file: TFile) {
+  private async proccessPage(file: TFile, silent = false) {
     // const content = await this.app.vault.read(file);
     const content = await this.app.vault.cachedRead(file);
 
@@ -42,11 +44,11 @@ export default class LocalImagesPlugin extends Plugin {
       this.modifiedQueue.remove(file);
       await this.app.vault.modify(file, fixedContent);
 
-      if (this.settings.showNotifications) {
+      if (!silent && this.settings.showNotifications) {
         new Notice(`Images for "${file.path}" were processed.`);
       }
     } else {
-      if (this.settings.showNotifications) {
+      if (!silent && this.settings.showNotifications) {
         new Notice(
           `Page "${file.path}" has been processed, but nothing was changed.`
         );
@@ -64,14 +66,35 @@ export default class LocalImagesPlugin extends Plugin {
     const files = this.app.vault.getMarkdownFiles();
     const includeRegex = new RegExp(this.settings.include, "i");
 
-    const promises: Promise<void>[] = [];
-    for (const file of files) {
+    const pagesCount = files.length;
+
+    const notice = this.settings.showNotifications
+      ? new Notice(
+          `Local Images \nStart processing. Total ${pagesCount} pages. `,
+          TIMEOUT_LIKE_INFINITY
+        )
+      : null;
+
+    for (const [index, file] of files.entries()) {
       if (file.path.match(includeRegex)) {
-        promises.push(this.proccessPage(file));
+        if (notice) {
+          // setMessage() is undeclared but factically existing, so ignore the TS error
+          // @ts-expect-error
+          notice.setMessage(
+            `Local Images: Processing \n"${file.path}" \nPage ${index} of ${pagesCount}`
+          );
+        }
+        await this.proccessPage(file, true);
       }
     }
+    if (notice) {
+      // @ts-expect-error
+      notice.setMessage(`Local Images: ${pagesCount} pages were processed.`);
 
-    await Promise.all(promises);
+      setTimeout(() => {
+        notice.hide();
+      }, NOTICE_TIMEOUT);
+    }
   };
 
   async onload() {
