@@ -1,3 +1,4 @@
+import path from "path";
 import got from "got";
 import { fromBuffer } from "file-type";
 import isSvg from "is-svg";
@@ -59,4 +60,10 @@ export function cleanFileName(name: string) {
     "_"
   );
   return cleanedName;
+}
+
+export function pathJoin(dir: string, subpath: string): string {
+  const result = path.join(dir, subpath);
+  // it seems that obsidian do not understand paths with backslashes in Windows, so turn them into forward slashes
+  return result.replace(/\\/g, "/");
 }

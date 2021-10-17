@@ -1,9 +1,15 @@
-import path from "path";
 import { URL } from "url";
+import path from "path";
 
 import { App, DataAdapter } from "obsidian";
 
-import { isUrl, downloadImage, fileExtByContent, cleanFileName } from "./utils";
+import {
+  isUrl,
+  downloadImage,
+  fileExtByContent,
+  cleanFileName,
+  pathJoin,
+} from "./utils";
 import {
   FILENAME_TEMPLATE,
   MAX_FILENAME_INDEX,
@@ -94,8 +100,8 @@ async function chooseFileName(
   let index = 0;
   while (!fileName && index < MAX_FILENAME_INDEX) {
     const suggestedName = index
-      ? path.join(dir, `${baseName}-${index}.${fileExt}`)
-      : path.join(dir, `${baseName}.${fileExt}`);
+      ? pathJoin(dir, `${baseName}-${index}.${fileExt}`)
+      : pathJoin(dir, `${baseName}.${fileExt}`);
 
     if (await adapter.exists(suggestedName, false)) {
       linkHashes.ensureHashGenerated(link, contentData);
