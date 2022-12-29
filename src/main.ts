@@ -28,8 +28,8 @@ export default class LocalImagesPlugin extends Plugin {
   private async proccessPage(file: TFile, silent = false) {
     // const content = await this.app.vault.read(file);
     const content = await this.app.vault.cachedRead(file);
-
-    await this.ensureFolderExists(this.settings.mediaRootDirectory);
+    const parentPath = file.parent.path;
+    await this.ensureFolderExists(parentPath);
 
     const cleanedContent = this.settings.cleanContent
       ? cleanContent(content)
@@ -37,7 +37,7 @@ export default class LocalImagesPlugin extends Plugin {
     const fixedContent = await replaceAsync(
       cleanedContent,
       EXTERNAL_MEDIA_LINK_PATTERN,
-      imageTagProcessor(this.app, this.settings.mediaRootDirectory)
+      imageTagProcessor(this.app, parentPath)
     );
 
     if (content != fixedContent) {
