@@ -1,3 +1,9 @@
+# 编译与安装
+npm install
+npm run dev 或者 npm run build
+将 manifest.json和styles.css 拷到build目录下
+将build目录拷到obsidian插件目录下。在obsidian插件页面可以打开插件目录
+![](20221229115128.png)  
 # Obsidian Local Images
 
 **This plugin is still young, backups are a good idea.**
